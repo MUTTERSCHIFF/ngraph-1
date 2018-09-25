@@ -294,8 +294,9 @@ ONNXIFI_PUBLIC ONNXIFI_CHECK_RESULT onnxStatus ONNXIFI_ABI
     {
         return ONNXIFI_STATUS_NO_SYSTEM_MEMORY;
     }
-    catch (const std::runtime_error&)
+    catch (const std::runtime_error& e)
     {
+        std::cout << "\n nGraph error: " << e.what() << "\n";
         return ONNXIFI_STATUS_INVALID_PROTOBUF;
     }
     catch (...)

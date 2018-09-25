@@ -52,12 +52,6 @@ namespace ngraph
             {
             }
 
-            Graph(const Backend& backend, std::istream& sin)
-                : m_function{onnx_import::import_onnx_function(sin)}
-                , m_backend{backend}
-            {
-            }
-
             explicit operator ::onnxGraph() const;
 
             void set_weights(const Span<::onnxTensorDescriptorV1>& weights);
@@ -69,7 +63,7 @@ namespace ngraph
             void configure_memory_fences(const ::onnxMemoryFenceV1* input_fence,
                                          ::onnxMemoryFenceV1* output_fence);
 
-            void from_stream(std::istream& sin);
+            void load(std::istream& sin, const Span<::onnxTensorDescriptorV1>& weights);
 
             bool operator==(const Graph& other) const noexcept;
             bool operator!=(const Graph& other) const noexcept;
@@ -95,11 +89,6 @@ namespace ngraph
         inline bool Graph::operator!=(const Graph& other) const noexcept
         {
             return !(*this == other);
-        }
-
-        inline void Graph::from_stream(std::istream& sin)
-        {
-            m_function = onnx_import::import_onnx_function(sin);
         }
 
         inline void Graph::set_inputs(const Span<::onnxTensorDescriptorV1>& inputs)

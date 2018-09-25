@@ -36,6 +36,48 @@ namespace ngraph
                 ::onnxStatus m_status;
             };
 
+            inline std::string get_name(::onnxStatus status)
+            {
+#define ONNXIFI_STATUS_(value__)                                                                   \
+    case ONNXIFI_STATUS_##value__: return "ONNXIFI_STATUS_" #value__;
+
+                switch (status)
+                {
+                ONNXIFI_STATUS_(SUCCESS);
+                ONNXIFI_STATUS_(FALLBACK);
+                ONNXIFI_STATUS_(INVALID_ID);
+                ONNXIFI_STATUS_(INVALID_SIZE);
+                ONNXIFI_STATUS_(INVALID_POINTER);
+                ONNXIFI_STATUS_(INVALID_PROTOBUF);
+                ONNXIFI_STATUS_(INVALID_MODEL);
+                ONNXIFI_STATUS_(INVALID_BACKEND);
+                ONNXIFI_STATUS_(INVALID_GRAPH);
+                ONNXIFI_STATUS_(INVALID_EVENT);
+                ONNXIFI_STATUS_(INVALID_STATE);
+                ONNXIFI_STATUS_(INVALID_NAME);
+                ONNXIFI_STATUS_(INVALID_SHAPE);
+                ONNXIFI_STATUS_(INVALID_DATATYPE);
+                ONNXIFI_STATUS_(INVALID_MEMORY_TYPE);
+                ONNXIFI_STATUS_(INVALID_MEMORY_LOCATION);
+                ONNXIFI_STATUS_(INVALID_FENCE_TYPE);
+                ONNXIFI_STATUS_(INVALID_PROPERTY);
+                ONNXIFI_STATUS_(UNSUPPORTED_TAG);
+                ONNXIFI_STATUS_(UNSUPPORTED_VERSION);
+                ONNXIFI_STATUS_(UNSUPPORTED_OPERATOR);
+                ONNXIFI_STATUS_(UNSUPPORTED_ATTRIBUTE);
+                ONNXIFI_STATUS_(UNSUPPORTED_SHAPE);
+                ONNXIFI_STATUS_(UNSUPPORTED_DATATYPE);
+                ONNXIFI_STATUS_(NO_SYSTEM_MEMORY);
+                ONNXIFI_STATUS_(NO_DEVICE_MEMORY);
+                ONNXIFI_STATUS_(NO_SYSTEM_RESOURCES);
+                ONNXIFI_STATUS_(NO_DEVICE_RESOURCES);
+                ONNXIFI_STATUS_(BACKEND_UNAVAILABLE);
+                ONNXIFI_STATUS_(INTERNAL_ERROR);
+                default:
+                    return "UNKNOWN (" + std::to_string(status) + ")";
+                }
+            }
+
             struct internal : runtime
             {
                 constexpr internal()

@@ -48,9 +48,60 @@ namespace ngraph
                 };
 
             } // namespace error
+
+            const element::Type& to_ng_type(const Weight& weight)
+            {
+                switch (weight.type)
+                {
+                case Weight::Type::f16:
+                case Weight::Type::f32:
+                    return element::f32;
+                case Weight::Type::f64:
+                    return element::f64;
+                case Weight::Type::i8:
+                    return element::i8;
+                case Weight::Type::u8:
+                    return element::u8;
+                case Weight::Type::i16:
+                    return element::i16;
+                case Weight::Type::u16:
+                    return element::u16;
+                case Weight::Type::i32:
+                    return element::i32;
+                case Weight::Type::u32:
+                    return element::u32;
+                case Weight::Type::i64:
+                    return element::i64;
+                case Weight::Type::u64:
+                    return element::u64;
+                default:
+                    return element::undefined;
+                }
+            }
+
+            const Shape to_ng_shape(const Weight& weight)
+            {
+                if ((weight.shape() == nullptr) || (weight.dimensions() == 0))
+                {
+                    return {1};
+                }
+                return {weight.shape(), weight.shape() + weight.dimensions()};
+            }
+
+            op::ParameterVector to_ng_parameters(const Weights& weights)
+            {
+                op::ParameterVector result;
+                for (const auto& weight : weights)
+                {
+                    result.push_back(std::make_shared<op::Paramter>(to_ng_type(weight), to_ng_shape(weight)));
+                    result.back().set_name(weight.name());
+                }
+                return result;
+            }
+
         }     // namespace detail
 
-        std::vector<std::shared_ptr<Function>> load_onnx_model(std::istream& sin)
+        std::vector<std::shared_ptr<Function>> load_onnx_model(std::istream& sin, const Weights& weights)
         {
             onnx::ModelProto model_proto;
             if (!model_proto.ParseFromIstream(&sin))
@@ -59,7 +110,7 @@ namespace ngraph
             }
             std::vector<std::shared_ptr<Function>> output_functions;
             Model model{model_proto};
-            Graph graph{model_proto.graph()};
+            Graph graph{model_proto.graph(), weights};
             for (const auto& output : graph.get_outputs())
             {
                 output_functions.emplace_back(std::make_shared<Function>(
@@ -68,24 +119,24 @@ namespace ngraph
             return output_functions;
         }
 
-        std::vector<std::shared_ptr<Function>> load_onnx_model(const std::string& path)
+        std::vector<std::shared_ptr<Function>> load_onnx_model(const std::string& path, const Weights& weights)
         {
             std::ifstream ifs{path, std::ios::in | std::ios::binary};
             if (!ifs.is_open())
             {
                 throw detail::error::file_open{path};
             }
-            return load_onnx_model(ifs);
+            return load_onnx_model(ifs, weights);
         }
 
-        std::shared_ptr<Function> import_onnx_function(std::istream& sin)
+        std::shared_ptr<Function> import_onnx_function(std::istream& sin, const Weights& weights)
         {
-            return load_onnx_model(sin).front();
+            return load_onnx_model(sin, weights).front();
         }
 
-        std::shared_ptr<Function> import_onnx_function(const std::string& path)
+        std::shared_ptr<Function> import_onnx_function(const std::string& path, const Weights& weights)
         {
-            return load_onnx_model(path).front();
+            return load_onnx_model(path, weights).front();
         }
 
     } // namespace onnx_import

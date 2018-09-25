@@ -70,29 +70,37 @@ namespace ngraph
         private:
             std::mutex m_mutex{};
             std::map<::onnxGraph, std::unique_ptr<Graph>> m_graphs{};
-            Queue<std::reference_wrapper<Graph>> m_task_queue;
+            Queue<Graph*> m_task_queue;
             std::atomic_bool m_quit{false};
-            Event m_event{};
+            EventAuto m_event{};
             std::thread m_thread{[&] {
                 while (true)
                 {
-                    while (m_task_queue.empty())
+                    try
                     {
-                        m_event.wait_for_and_reset(std::chrono::milliseconds{100});
+                        while (m_task_queue.empty())
+                        {
+                            m_event.wait_for(std::chrono::milliseconds{100});
+                            if (m_quit)
+                            {
+                                break;
+                            }
+                        }
                         if (m_quit)
                         {
                             break;
                         }
+                        auto graph = m_task_queue.front();
+                        m_task_queue.pop();
+                        if (!graph->run_graph())
+                        {
+                            // todo: log failure running computation on graph
+                        }
                     }
-                    if (m_quit)
+                    catch(const status::runtime& e)
                     {
-                        break;
-                    }
-                    Graph& graph = m_task_queue.front();
-                    m_task_queue.pop();
-                    if (!graph.run_graph())
-                    {
-                        // todo: log failure running computation on graph
+                        std::cout << "working thread: " << status::get_name(e.get_status()) << "\n";
+                        throw;
                     }
                 }
             }};
@@ -126,8 +134,8 @@ namespace ngraph
                       ::onnxMemoryFenceV1* output_fence)
             {
                 std::lock_guard<std::mutex> lock{m_mutex};
-                auto& graph = *m_graphs.at(handle);
-                graph.configure_memory_fences(input_fence, output_fence);
+                auto graph = m_graphs.at(handle).get();
+                graph->configure_memory_fences(input_fence, output_fence);
                 m_task_queue.emplace(graph);
                 m_event.signal();
             }

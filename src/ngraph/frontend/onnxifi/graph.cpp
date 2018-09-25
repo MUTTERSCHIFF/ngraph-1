@@ -25,15 +25,19 @@ namespace ngraph
     {
         bool Graph::run_graph()
         {
+            std::cout << std::hex << "\n\tinput_event : 0x" << reinterpret_cast<uintptr_t>(m_input_fence->event)
+                      << "\n\toutput_event: 0x" << reinterpret_cast<uintptr_t>(m_output_fence->event) << "\n";
             ::onnxStatus status{::onnxWaitEvent(m_input_fence->event)};
             if (status != ONNXIFI_STATUS_SUCCESS)
             {
-                throw status::runtime{status};
+                std::cout << "waitEvent(input): " << status::get_name(status) << "\n";
+//                throw status::runtime{status};
             }
             bool result{m_backend.call(m_function, m_inputs, m_outputs)};
             status = ::onnxSignalEvent(m_output_fence->event);
             if (status != ONNXIFI_STATUS_SUCCESS)
             {
+                std::cout << "signalEvent(output): " << status::get_name(status) << "\n";
                 throw status::runtime{status};
             }
             return result;
@@ -81,105 +85,69 @@ namespace ngraph
                 throw status::invalid_state{};
             }
             status = ::onnxGetEventState(input_fence->event, &state);
-            if (status != ONNXIFI_STATUS_SUCCESS)
+            std::cout << "\n\t#1: input_fence : 0x" << std::hex << reinterpret_cast<uintptr_t>(input_fence->event)
+                      << "\n\t    output_fence: 0x" << std::hex << reinterpret_cast<uintptr_t>(output_fence->event)
+                      << "\n\t    status      : " << status::get_name(status) << "\n";
+             if (status != ONNXIFI_STATUS_SUCCESS)
             {
                 throw status::runtime{status};
             }
-            if (state != ONNXIFI_EVENT_STATE_NONSIGNALLED)
-            {
-                throw status::invalid_state{};
-            }
             m_input_fence = input_fence;
             m_output_fence = output_fence;
+            std::cout << "\n\t#2: input_fence : 0x" << std::hex << reinterpret_cast<uintptr_t>(m_input_fence->event)
+                      << "\n\t    output_fence: 0x" << std::hex << reinterpret_cast<uintptr_t>(m_output_fence->event) << "\n";
         }
 
         bool Graph::compile() { return m_backend.compile(m_function); }
-        void Graph::set_weights(const Span<onnxTensorDescriptorV1>& weights)
+        void Graph::load(std::istream& sin, const Span<::onnxTensorDescriptorV1>& weight_descriptors)
         {
-            if (weights.data() != nullptr)
+            if (weight_descriptors.data() == nullptr)
             {
-                if (weights.empty())
-                {
-                    throw status::invalid_size{};
-                }
-
-                /* TODO: apply weights to the graph */
+                throw status::null_pointer{};
             }
-            else
+            if (weight_descriptors.empty())
             {
-                if (!weights.empty())
-                {
-                    throw status::null_pointer{};
-                }
+                throw status::invalid_size{};
             }
-        }
-
-        /* void Graph::validate_tensor_descriptors(const Span<::onnxTensorDescriptorV1>& descriptors) const
-        {
-            for (const auto& descriptor : descriptors)
+            onnx_import::Weights weights;
+            for (const auto& weight : weight_descriptors)
             {
-                if (descriptor.tag != ONNXIFI_TAG_TENSOR_DESCRIPTOR_V1)
-                {
-                    throw status::unsupported_tag{};
-                }
-                if (descriptor.name == nullptr)
-                {
-                    throw status::invalid_name{};
-                }
-                switch (descriptor.dataType)
-                {
-                    case ONNXIFI_DATATYPE_FLOAT16:
-                    case ONNXIFI_DATATYPE_FLOAT32:
-                    case ONNXIFI_DATATYPE_FLOAT64:
-                    case ONNXIFI_DATATYPE_INT8:
-                    case ONNXIFI_DATATYPE_INT16:
-                    case ONNXIFI_DATATYPE_INT32:
-                    case ONNXIFI_DATATYPE_INT64:
-                    case ONNXIFI_DATATYPE_UINT8:
-                    case ONNXIFI_DATATYPE_UINT16:
-                    case ONNXIFI_DATATYPE_UINT32:
-                    case ONNXIFI_DATATYPE_UINT64:
-                        break;
-                    case ONNXIFI_DATATYPE_COMPLEX64:
-                    case ONNXIFI_DATATYPE_COMPLEX128:
-                        throw status::invalid_datatype{};
-                    default:
-                        throw status::unsupported_datatype{};
-                }
-                switch (descriptor.memoryType)
-                {
-                    case ONNXIFI_MEMORY_TYPE_CPU:
-                        break;
-                    case ONNXIFI_MEMORY_TYPE_CUDA_BUFFER:
-                    case ONNXIFI_MEMORY_TYPE_OPENCL_BUFFER:
-                    case ONNXIFI_MEMORY_TYPE_OPENGLES_TEXTURE_2D:
-                    case ONNXIFI_MEMORY_TYPE_D3D_RESOURCE:
-                        throw status::invalid_memory_type{};
-                    default:
-                        throw status::unsupported_memory_type{};
-                }
-                if ((descriptor.dimensions != 0) &&
-                    (descriptor.shape == nullptr))
-                {
-                    throw status::null_pointer{};
-                }
-                if (descriptor.shape != nullptr)
-                {
-                    Span<uint64_t> shape{descriptor.shape, descriptor.dimensions};
-                    for (const auto& value : shape)
+                InputTensor tensor{weight};
+                auto get_type = [](onnxEnum dataType) -> onnx_import::Weight::Type {
+                    switch (dataType)
                     {
-                        if (value == 0)
-                        {
-                            throw status::invalid_shape{};
-                        }
+                    case ONNXIFI_DATATYPE_FLOAT16:
+                        return onnx_import::Weight::Type::f16;
+                    case ONNXIFI_DATATYPE_FLOAT32:
+                        return onnx_import::Weight::Type::f32;
+                    case ONNXIFI_DATATYPE_FLOAT64:
+                        return onnx_import::Weight::Type::f64;
+                    case ONNXIFI_DATATYPE_INT8:
+                        return onnx_import::Weight::Type::i8;
+                    case ONNXIFI_DATATYPE_INT16:
+                        return onnx_import::Weight::Type::i16;
+                    case ONNXIFI_DATATYPE_INT32:
+                        return onnx_import::Weight::Type::i32;
+                    case ONNXIFI_DATATYPE_INT64:
+                        return onnx_import::Weight::Type::i64;
+                    case ONNXIFI_DATATYPE_UINT8:
+                        return onnx_import::Weight::Type::u8;
+                    case ONNXIFI_DATATYPE_UINT16:
+                        return onnx_import::Weight::Type::u16;
+                    case ONNXIFI_DATATYPE_UINT32:
+                        return onnx_import::Weight::Type::u32;
+                    case ONNXIFI_DATATYPE_UINT64:
+                        return onnx_import::Weight::Type::u64;
+                    default:
+                        throw status::invalid_datatype{};
                     }
-                }
-                if (descriptor.buffer == 0)
-                {
-                    throw status::invalid_memory_location{};
-                }
+                };
+
+                weights.emplace_back(weight.name, get_type(weight.dataType),
+                     weight.dimensions, weight.shape, reinterpret_cast<const void*>(weight.buffer));
             }
-        } */
+            m_function = onnx_import::import_onnx_function(sin, weights);
+        }
 
     } // namespace onnxifi
 

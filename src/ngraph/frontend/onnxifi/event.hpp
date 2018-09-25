@@ -26,16 +26,37 @@ namespace ngraph
     namespace onnxifi
     {
         /// \brief Implementation of onnxEvent data type.
+        namespace detail {
+        template <bool Autoreset>
         class Event
         {
         public:
             Event(const Event&) = delete;
             Event& operator=(const Event&) = delete;
 
-            Event(Event&&) noexcept;
-            Event& operator=(Event&&) noexcept;
-
             Event() = default;
+
+            Event(Event&& other, std::lock_guard<std::mutex>&)
+                : m_signaled{other.m_signaled}
+            {
+            }
+
+            Event(Event&& other)
+                : Event{other, std::lock_guard<std::mutex>{other.m_mutex}}
+            {
+            }
+
+            Event& operator=(Event&& other) noexcept
+            {
+                if (this != &other)
+                {
+                    std::unique_lock<std::mutex> lock{m_mutex, std::defer_lock};
+                    std::unique_lock<std::mutex> other_lock{other.m_mutex, std::defer_lock};
+                    std::lock(lock, other_lock);
+                    m_signaled = other.m_signaled;
+                }
+                return *this;
+            }
 
             void signal()
             {
@@ -58,22 +79,21 @@ namespace ngraph
             {
                 std::unique_lock<std::mutex> lock{m_mutex};
                 m_condition_variable.wait(lock, [&] { return m_signaled; });
+                if (Autoreset)
+                {
+                    m_signaled = false;
+                }
             }
 
             template <typename Rep, typename Period>
             bool wait_for(const std::chrono::duration<Rep, Period>& duration) const
             {
                 std::unique_lock<std::mutex> lock{m_mutex};
-                return m_condition_variable.wait_for(lock, duration, [&] { return m_signaled; });
-            }
-
-            template <typename Rep, typename Period>
-            bool wait_for_and_reset(const std::chrono::duration<Rep, Period>& duration)
-            {
-                std::unique_lock<std::mutex> lock{m_mutex};
-                bool result{
-                    m_condition_variable.wait_for(lock, duration, [&] { return m_signaled; })};
-                m_signaled = false;
+                auto result{ m_condition_variable.wait_for(lock, duration, [&] { return m_signaled; })};
+                if (Autoreset)
+                {
+                    m_signaled = false;
+                }
                 return result;
             }
 
@@ -81,8 +101,12 @@ namespace ngraph
             bool wait_until(const std::chrono::time_point<Clock, Duration>& time_point) const
             {
                 std::unique_lock<std::mutex> lock{m_mutex};
-                return m_condition_variable.wait_until(
-                    lock, time_point, [&] { return m_signaled; });
+                auto result{m_condition_variable.wait_until(lock, time_point, [&] { return m_signaled; })};
+                if (Autoreset)
+                {
+                    m_signaled = false;
+                }
+                return result;
             }
 
             bool is_signaled() const
@@ -104,8 +128,13 @@ namespace ngraph
         private:
             mutable std::mutex m_mutex{};
             mutable std::condition_variable m_condition_variable{};
-            bool m_signaled{false};
+            mutable bool m_signaled{false};
         };
+
+        } // namespace detail
+
+        using Event = detail::Event<false>;
+        using EventAuto = detail::Event<true>;
 
     } // namespace onnxifi
 

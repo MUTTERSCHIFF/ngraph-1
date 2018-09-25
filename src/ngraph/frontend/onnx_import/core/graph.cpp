@@ -21,7 +21,7 @@ namespace ngraph
 {
     namespace onnx_import
     {
-        Graph::Graph(const onnx::GraphProto& graph_proto)
+        Graph::Graph(const onnx::GraphProto& graph_proto, const op::ParameterVector& weights)
             : m_graph_proto{&graph_proto}
         {
             for (const auto& tensor : m_graph_proto->initializer())
@@ -30,6 +30,12 @@ namespace ngraph
                 {
                     m_initializers.emplace(tensor.name(), Tensor{tensor});
                 }
+            }
+
+            for (const auto& weight : weights)
+            {
+                m_parameters.emplace_back(weight);
+                m_ng_node_cache[weight->get_name()] = m_parameters.back();
             }
 
             // Process all ONNX graph inputs, convert them to nGraph nodes and store in cache
