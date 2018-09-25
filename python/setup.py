@@ -228,13 +228,11 @@ package_dir={'ngraph': PYNGRAPH_SOURCE_DIR + "/ngraph",
 packages = ['ngraph', 'ngraph.utils', 'ngraph.impl', 'ngraph.impl.op', 
             'ngraph.impl.op.util', 'ngraph.impl.passes', 'ngraph.impl.runtime']
 
-NGRAPH_ONNX_IMPORT_FLAG = []
-
 if(os.environ.get('NGRAPH_ONNX_IMPORT_ENABLE') == 'TRUE'):
+    sources.append('pyngraph/pyngraph_onnx_import.cpp')
     sources.append('pyngraph/onnx_import/onnx_import.cpp')
     package_dir['ngraph.impl.onnx_import'] = PYNGRAPH_SOURCE_DIR + "/ngraph/impl/onnx_import"
     packages.append('ngraph.impl.onnx_import')
-    NGRAPH_ONNX_IMPORT_FLAG = ['-DNGRAPH_ONNX_IMPORT_ENABLE']
 
 sources = [PYNGRAPH_SOURCE_DIR + "/" + source for source in sources]
 
@@ -257,6 +255,16 @@ data_files = [('lib', [NGRAPH_CPP_LIBRARY_DIR + "/" + library for library in os.
 
 ext_modules = [Extension(
                    '_pyngraph',
+                   sources = sources,
+                   include_dirs = include_dirs,
+                   define_macros = [("VERSION_INFO", __version__)],
+                   library_dirs = library_dirs,
+                   libraries = libraries,
+                   extra_link_args = extra_link_args,
+                   language = "c++",
+                   ),
+               Extension(
+                   '_pyngraph_onnx_import',
                    sources = sources,
                    include_dirs = include_dirs,
                    define_macros = [("VERSION_INFO", __version__)],
@@ -295,7 +303,6 @@ class BuildExt(build_ext):
                 ext.extra_link_args += ['-z', 'now']
             ext.extra_compile_args += ['-Wformat', '-Wformat-security', '-Wno-comment']
             ext.extra_compile_args += ['-O2', '-D_FORTIFY_SOURCE=2']
-            ext.extra_compile_args += NGRAPH_ONNX_IMPORT_FLAG
         build_ext.build_extensions(self)
 
 

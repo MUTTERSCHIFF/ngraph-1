@@ -33,10 +33,6 @@
 #include "pyngraph/types/regmodule_pyngraph_types.hpp"
 #include "pyngraph/util.hpp"
 
-#ifdef NGRAPH_ONNX_IMPORT_ENABLE
-#include "pyngraph/onnx_import/onnx_import.hpp"
-#endif // NGRAPH_ONNX_IMPORT_ENABLE
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(_pyngraph, m)
@@ -60,10 +56,4 @@ PYBIND11_MODULE(_pyngraph, m)
     regmodule_pyngraph_runtime(m);
     regmodule_pyngraph_passes(m);
     regmodule_pyngraph_util(m);
-#ifdef NGRAPH_ONNX_IMPORT_ENABLE
-    py::module m_onnx_import = m.def_submodule("onnx_import",
-                                               "Package ngraph.impl.onnx_import "
-                                               "that wraps ngraph::onnx_import");
-    regmodule_pyngraph_onnx_import(m_onnx_import);
-#endif // NGRAPH_ONNX_IMPORT_ENABLE
 }
